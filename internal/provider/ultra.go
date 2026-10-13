@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/yetone/magpie/internal/settings"
 )
 
 // Codex's Ultra is not a level an API takes: Codex sends the model its max
@@ -13,7 +15,10 @@ import (
 // whose entry lists "ultra"; its own catalog (models-manager/models.json)
 // lists it for these alone — GPT-6 Luna and GPT-5.6 Luna stop at max — so
 // magpie offers it on them wherever they are served (Copilot's, a key's, a
-// relay's: #656), never on every model that reaches max.
+// relay's: #656), never on every model that reaches max — unless
+// settings.CodexUltraAll asks for it on every one of them (a non-OpenAI
+// lead then spawns subagents like ChatGPT's models do, as cockpit-tools'
+// templates set up).
 var ultraModels = []string{"gpt-6.1-sol", "gpt-6-sol", "gpt-6-astra", "gpt-5.6-sol", "gpt-5.6-terra"}
 
 // datedSuffix is a snapshot's date after a model's id (-2026-09-14, -20260914).
@@ -31,9 +36,13 @@ func OffersUltra(model string) bool {
 }
 
 // withUltra adds Codex's ultra to the levels of a model that offers it and
-// reaches max; the gateway sends max for it (fitEffort).
-func withUltra(model string, efforts []string) []string {
-	if !OffersUltra(model) || !slices.Contains(efforts, "max") || slices.Contains(efforts, "ultra") {
+// reaches max; the gateway sends max for it (fitEffort). Every model that
+// reaches max is given it with settings.CodexUltraAll.
+func withUltra(model string, efforts []string, s settings.Settings) []string {
+	if !slices.Contains(efforts, "max") || slices.Contains(efforts, "ultra") {
+		return efforts
+	}
+	if !OffersUltra(model) && !s.CodexUltraAll {
 		return efforts
 	}
 	return append(slices.Clone(efforts), "ultra")

@@ -2598,7 +2598,7 @@ func entryFor(p Provider, m catalog.Model, s settings.Settings) Entry {
 	// lead, so Codex is told V2 for it, where Ultra hands work to them
 	// (codexcat.Entries).
 	if (p.Account == nil || p.Account.Agent != "codex") && len(m.Codex) == 0 {
-		e.Efforts = withUltra(m.ID, e.Efforts)
+		e.Efforts = withUltra(m.ID, e.Efforts, s)
 		e.AgentsV2 = slices.Contains(e.Efforts, "ultra")
 	}
 	// one the user said takes no reasoning ask offers none and is sent

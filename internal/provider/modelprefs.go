@@ -815,6 +815,21 @@ func SetCodexAgentsV1(on bool) error {
 	return nil
 }
 
+// SetCodexUltraAll turns settings.CodexUltraAll on or off, and has Codex's
+// lists written and asked for again.
+func SetCodexUltraAll(on bool) error {
+	s := settings.Load()
+	if s.CodexUltraAll == on {
+		return nil
+	}
+	s.CodexUltraAll = on
+	if err := settings.Save(s); err != nil {
+		return err
+	}
+	catalog.Touched()
+	return nil
+}
+
 // SetCodexAutoReview sets settings.CodexAutoReview, the model Codex's
 // auto-review runs on ("" for Codex's own pick), and has Codex's lists
 // written and asked for again.

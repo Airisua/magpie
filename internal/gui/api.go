@@ -1323,6 +1323,7 @@ func Handler(w Windows, gw *gateway.Server) http.Handler {
 		in.PlainNames, in.PlainOwnNames = cur.PlainNames, cur.PlainOwnNames
 		in.BareModelIDs = cur.BareModelIDs // set on its own (bare-ids below)
 		in.CodexAgentsV1 = cur.CodexAgentsV1
+		in.CodexUltraAll = cur.CodexUltraAll
 		in.FullContext = cur.FullContext // set on its own (full-context below)
 		in.CompactAt = cur.CompactAt     // and so is the threshold
 		// Codex's background compaction, set on its own (codex-async-compact below)
@@ -1562,6 +1563,21 @@ func Handler(w Windows, gw *gateway.Server) http.Handler {
 		s := settings.Load()
 		s.GuideHidden = in.Hidden
 		if err := settings.Save(s); err != nil {
+			fail(rw, err)
+			return
+		}
+		writeJSON(rw, settingsState())
+	})
+	// whether every model that reaches max offers Codex's Ultra
+	// (settings.CodexUltraAll): Codex's lists are written again and asked
+	// for again
+	mux.HandleFunc("POST /api/settings/codex-ultra", func(rw http.ResponseWriter, r *http.Request) {
+		var in struct{ On bool }
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			fail(rw, err)
+			return
+		}
+		if err := provider.SetCodexUltraAll(in.On); err != nil {
 			fail(rw, err)
 			return
 		}

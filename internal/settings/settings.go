@@ -509,6 +509,15 @@ type Settings struct {
 	// (internal/agent/codex.go, and the Settings row) and leaves it to the
 	// user to turn off. A thread keeps the version it started with.
 	CodexAgentsV1 bool `json:"codexAgentsV1,omitempty"`
+	// CodexUltraAll offers Codex's Ultra on every model of magpie's whose
+	// levels reach max, not only the ones that offer it already (Codex's
+	// own names, #656): a model with ultra is told multi_agent_version
+	// "v2", and Codex then offers the level in its picker and, on a V2
+	// thread, hands parts of the task to agents of its own, so a non-OpenAI
+	// lead spawns subagents like its models do (cockpit-tools' templates
+	// set the same). New threads only, as with CodexAgentsV1; off by
+	// default.
+	CodexUltraAll bool `json:"codexUltraAll,omitempty"`
 	// CodexTitles is where the requests Codex makes for a thread's title
 	// (thread_title, thread_title_reconsideration: a hidden turn of their
 	// own, on Codex's own model through its ChatGPT sign-in) go (#705): ""

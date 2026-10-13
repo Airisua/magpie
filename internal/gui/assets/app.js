@@ -20817,7 +20817,7 @@ function renderAlerts(s, keep) {
 // in Settings, apart from the agents they set (the owner, 10-20); Long
 // conversations is Codex's and Claude Code's both, in each one's sheet.
 const AGENT_PREFS = {
-  codex: ["codexAgentsV1Row", "codexSubagentModelRow", "fullContextRow", "codexAsyncRow", "codexTitlesRow", "codexDescriptionsRow", "codexPredictionsRow", "codexAutoReviewRow", "codexMemoriesRow"],
+  codex: ["codexAgentsV1Row", "codexUltraRow", "codexSubagentModelRow", "fullContextRow", "codexAsyncRow", "codexTitlesRow", "codexDescriptionsRow", "codexPredictionsRow", "codexAutoReviewRow", "codexMemoriesRow"],
   claude: ["fullContextRow"],
 };
 const agentPrefsOf = (a) => gatewayMode ? null : AGENT_PREFS[a.id.split("@wsl:")[0]];
@@ -20876,6 +20876,11 @@ function renderAgentPrefs() {
   v1Warn.textContent = s.notice ? tNotice(s.notice) : "";
   $("#codexAgentsV1Segs").replaceChildren(segs([["off", t("Off")], ["on", t("On")]], s.codexAgentsV1 ? "on" : "off", (v) =>
     writingPrefs(api("settings/codex-agents-v1", { on: v === "on" })).then((ns) => { prefs = ns; renderSettings(); if (ns.notice) status(tNotice(ns.notice), "warn", 9000); }).catch((e) => { status(t(e.message), "err"); renderSettings(); })));
+  // every model that reaches max offers Ultra too, V2 with it (cockpit-tools
+  // sets its templates' models up the same): a non-OpenAI lead spawns
+  // subagents as ChatGPT's models do
+  $("#codexUltraSegs").replaceChildren(segs([["off", t("Off")], ["on", t("On")]], s.codexUltraAll ? "on" : "off", (v) =>
+    writingPrefs(api("settings/codex-ultra", { on: v === "on" })).then((ns) => { prefs = ns; renderSettings(); }).catch((e) => { status(t(e.message), "err"); renderSettings(); })));
   // a 1M model's whole window, or compacting at the working one (X: Chen,
   // 70–90s to a first token at 550K)
   // at a size the user types too, not 272K alone (#876); a provider's own

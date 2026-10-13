@@ -71,3 +71,36 @@ func TestUltraOnModelsThatOfferIt(t *testing.T) {
 		t.Fatalf("group with a ChatGPT account's: %v v2=%v", g.Efforts, g.AgentsV2)
 	}
 }
+
+// settings.CodexUltraAll: every model of magpie's whose levels reach max
+// offers Codex's Ultra and is told multi-agent V2 — a lead that isn't
+// OpenAI's then spawns subagents as ChatGPT's models do (cockpit-tools sets
+// its model templates up the same). Off, only the models OpenAI offers it
+// on have it; a model short of max never does, and a ChatGPT account's
+// entry is the backend's whatever the setting.
+func TestUltraAllModels(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+
+	s := settings.Load()
+	relay := Provider{ID: "happycoding"}
+	upToMax := []string{"low", "high", "max"}
+	if e := entryFor(relay, catalog.Model{ID: "deepseek-v4.1-flash", Efforts: upToMax}, s); slices.Contains(e.Efforts, "ultra") || e.AgentsV2 {
+		t.Fatalf("off: %v v2=%v", e.Efforts, e.AgentsV2)
+	}
+	s.CodexUltraAll = true
+	e := entryFor(relay, catalog.Model{ID: "deepseek-v4.1-flash", Efforts: upToMax}, s)
+	if !slices.Equal(e.Efforts, append(slices.Clone(upToMax), "ultra")) || !e.AgentsV2 {
+		t.Fatalf("on: %v v2=%v", e.Efforts, e.AgentsV2)
+	}
+	if e := entryFor(relay, catalog.Model{ID: "grok-4.7", Efforts: []string{"low", "medium", "high", "xhigh"}}, s); slices.Contains(e.Efforts, "ultra") || e.AgentsV2 {
+		t.Fatalf("up to xhigh: %v v2=%v", e.Efforts, e.AgentsV2)
+	}
+	own := entryFor(Provider{ID: "codex", Account: &Account{Agent: "codex"}}, catalog.Model{ID: "gpt-5.6-terra", Efforts: upToMax}, s)
+	if slices.Contains(own.Efforts, "ultra") || own.AgentsV2 {
+		t.Fatalf("codex/: %v v2=%v", own.Efforts, own.AgentsV2)
+	}
+}

@@ -514,7 +514,79 @@ func codexIn(at place) *Agent {
 	// which is what Default on the effort control asked for (lgtm: Default
 	// turned into medium on its own). Routed, the Codex app offers
 	// magpie's models' efforts too (#310).
+	// compactLimit is where Codex is to compact on the model it is on, by
+	// magpie's settings: its per-model or per-provider Compact at, else the
+	// one for every model (CompactAt, 272K, none under Full window) — the
+	// same working window the model list's entry carries (codexcat). mine
+	// is false for a model magpie doesn't know, whose key is the user's;
+	// typed says a size was set in magpie (a Compact at, the one for every
+	// model, or Full window), not only its default.
+	compactLimit := func() (n int, mine, typed bool) {
+		e, ok := provider.EntryOf(get("model"))
+		if !ok || e.Context <= 0 {
+			return 0, false, false
+		}
+		s := settings.Load()
+		w := s.Working(e.Context)
+		if cs := provider.CompactFor(s, e, provider.GroupFinder()); cs > 0 {
+			w = min(e.Context, cs)
+			typed = true
+		}
+		typed = typed || s.CompactAt > 0 || s.FullContext
+		if w >= e.Context {
+			return 0, true, typed
+		}
+		return w, true, typed
+	}
+	// dropCompact takes a size magpie wrote away again, when the file still
+	// holds it; one the user changed since is theirs, and only forgotten
+	dropCompact := func() error {
+		was := strings.TrimSpace(stashLoad()[at.key("codex.compact")])
+		if was == "" {
+			return nil
+		}
+		v, _ := edit.GetTOMLTop(path, "model_auto_compact_token_limit")
+		if strings.TrimSpace(v) == was {
+			if err := edit.DelTOMLTop(path, "model_auto_compact_token_limit"); err != nil {
+				return err
+			}
+		}
+		forget(at.key("codex.compact"))
+		return nil
+	}
+	// ownCompact keeps Codex's own compaction point at magpie's: the
+	// top-level model_auto_compact_token_limit, which Codex takes over the
+	// model list's context_window — and did, at a value another tool or the
+	// user had left (900K of a 1M model), so a conversation grew past the
+	// vendor's window before Codex's own count, magpie's too, reached the
+	// limit, and the compaction it then sent no longer fit and was refused.
+	// A size set in magpie is written; magpie's bare default yields to a
+	// value of the user's own, as Claude Code's window yields to
+	// autoCompactWindow (#876). Full window takes magpie's own away again;
+	// a value applied from the Tuning page stands.
+	ownCompact := func() error {
+		n, mine, typed := compactLimit()
+		v, _ := edit.GetTOMLTop(path, "model_auto_compact_token_limit")
+		v = strings.TrimSpace(v)
+		if st, ok := tuneStashed("codex", TuneCompact, ""); ok && strings.Trim(v, `"'`) == st.Set {
+			return nil
+		}
+		if typed && mine && n > 0 {
+			if v == strconv.Itoa(n) {
+				return nil
+			}
+			if err := edit.SetTOMLTop(path, edit.KV{Path: "model_auto_compact_token_limit", Value: n}); err != nil {
+				return err
+			}
+			stash(map[string]string{at.key("codex.compact"): strconv.Itoa(n)})
+			return nil
+		}
+		return dropCompact()
+	}
 	settle := func() error {
+		if err := ownCompact(); err != nil {
+			return err
+		}
 		if routed() {
 			if err := codexEnableEfforts(path, magpieModels("codex")); err != nil {
 				return err
@@ -1225,6 +1297,11 @@ func codexIn(at place) *Agent {
 	}
 	set := func(v string) error {
 		if v == "" {
+			// a compaction point magpie wrote goes with magpie; one of the
+			// user's own stays
+			if err := dropCompact(); err != nil {
+				return err
+			}
 			if err := dropSubagent(); err != nil {
 				return err
 			}
@@ -1576,6 +1653,12 @@ func codexIn(at place) *Agent {
 					return err
 				}
 			}
+			// Codex's own compaction point, as magpie's settings say: kept
+			// at what magpie wrote, put there again when something else took
+			// the key over
+			if err := ownCompact(); err != nil {
+				return err
+			}
 			switch {
 			case asProvider() && ownCatalog(get("model_catalog_json")):
 				// set up by a magpie from before #259: the threads started
@@ -1661,6 +1744,20 @@ func codexIn(at place) *Agent {
 			for id, u := range ccSwitchTables() {
 				if u != at.v1() {
 					return "Codex's [model_providers." + id + "] sends to " + u + ", not magpie's gateway: a Codex thread started on it goes there when reopened, a magpie model picked in it too"
+				}
+			}
+			// a compaction point of someone else's in config.toml, taken over
+			// the model list's window: Codex compacts there instead of where
+			// magpie's settings say, and a conversation near the vendor's own
+			// window fails before it ever does (Codex sends its model's whole
+			// output — 128K — on top of the conversation, which the vendor's
+			// count, unlike Codex's own and magpie's, counts against the
+			// window). magpie writes its own when it next syncs.
+			if n, mine, typed := compactLimit(); mine && typed && n > 0 {
+				if v, _ := edit.GetTOMLTop(path, "model_auto_compact_token_limit"); strings.TrimSpace(v) != "" && strings.TrimSpace(v) != strconv.Itoa(n) {
+					if st, ok := tuneStashed("codex", TuneCompact, ""); !ok || strings.Trim(strings.TrimSpace(v), `"'`) != st.Set {
+						return "Codex's model_auto_compact_token_limit is " + strings.TrimSpace(v) + ", not magpie's compaction point for " + get("model") + " (" + strconv.Itoa(n) + ", from Settings › how long conversations compact and a provider's Compact at): magpie writes its own when it next syncs"
+					}
 				}
 			}
 			return ""
